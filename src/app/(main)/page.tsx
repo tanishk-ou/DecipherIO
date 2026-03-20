@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import MagicText from "@/components/magic-text"; 
+import ReviewsSection from "@/components/reviews-section";
 
 export default function Home() {
   return (
@@ -84,6 +85,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+      
+      {/* ================= REVIEWS SECTION ================= */}
+      <ReviewsSection />
 
       {/* ================= CONTACT SECTION ================= */}
       <section className="flex items-center justify-center min-h-[50vh]">

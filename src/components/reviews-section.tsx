@@ -8,8 +8,8 @@ import { createClient } from "@supabase/supabase-js";
 
 // Initialize Supabase Client for fetching
 // Note: It's safe to use these NEXT_PUBLIC keys on the frontend to READ data
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabaseUrl = process.env.NEXT_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Define the Review Type

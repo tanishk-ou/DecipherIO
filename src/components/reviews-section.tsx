@@ -131,9 +131,17 @@ export default function ReviewsSection() {
                     <p className="text-gray-500 italic">No written reviews yet. Be the first!</p>
                 ) : (
                     textReviews.map((r) => (
-                      <div key={r.id} className="bg-white/50 backdrop-blur border p-6 rounded-2xl shadow-sm">
+                      <div key={r.id} className="bg-white/50 backdrop-blur border p-6 rounded-2xl shadow-sm flex flex-col justify-between">
                         <p className="italic mb-4 text-gray-700">"{r.content}"</p>
-                        <p className="font-bold">{r.name}</p>
+                        <p className="font-bold text-gray-900">
+                          {r.name} 
+                          {/* This will only render if r.role exists */}
+                          {r.role && (
+                            <span className="text-sm font-normal text-gray-500 ml-2">
+                              - {r.role}
+                            </span>
+                          )}
+                        </p>
                       </div>
                     ))
                 )}

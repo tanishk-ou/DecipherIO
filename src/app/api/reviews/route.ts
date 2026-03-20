@@ -10,6 +10,7 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const name = formData.get('name') as string;
+    const role = formData.get('role') as string;
     const type = formData.get('type') as string;
 
     let contentToSave = "";
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
     // Save the record to the Database
     const { error: dbError } = await supabase
       .from('reviews')
-      .insert([{ name, type, content: contentToSave, approved: false }]);
+      .insert([{ name, role, type, content: contentToSave, approved: false }]);
 
     if (dbError) throw dbError;
 

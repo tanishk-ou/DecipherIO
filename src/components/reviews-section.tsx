@@ -1,26 +1,70 @@
 "use client";
 
-import { useState } from "react";
-import { Star, PlayCircle, Plus, X, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Star, PlayCircle, Plus, X, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import MagicText from "@/components/magic-text";
+import { createClient } from "@supabase/supabase-js";
 
-// Dummy data for Phase 1 (Replace with DB fetch later)
-const MOCK_TEXT_REVIEWS = [
-  { id: 1, name: "Sarah J.", role: "Student", text: "Decipher.io completely changed how I read research papers." },
-  { id: 2, name: "Mark T.", role: "Teacher", text: "I recommend this extension to all my students." },
-];
+// Initialize Supabase Client for fetching
+// Note: It's safe to use these NEXT_PUBLIC keys on the frontend to READ data
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Define the Review Type
+type Review = {
+  id: number;
+  name: string;
+  type: string;
+  content: string;
+  role: string; // Optional if you decide to add roles later
+};
 
 export default function ReviewsSection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [reviewType, setReviewType] = useState<"text" | "video">("text");
 
+  // --- NEW: Database State ---
+  const [textReviews, setTextReviews] = useState<Review[]>([]);
+  const [videoReviews, setVideoReviews] = useState<Review[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(true);
+
   // Form State
   const [name, setName] = useState("");
+  const [role, setRole] = useState("");
   const [content, setContent] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- NEW: Fetch Reviews on Load ---
+  useEffect(() => {
+    async function fetchReviews() {
+      try {
+        // Fetch only approved reviews, newest first
+        const { data, error } = await supabase
+          .from("reviews")
+          .select("*")
+          .eq("approved", true)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        if (data) {
+          setTextReviews(data.filter((r) => r.type === "text"));
+          setVideoReviews(data.filter((r) => r.type === "video"));
+        }
+      } catch (error) {
+        console.error("Error fetching reviews:", error);
+      } finally {
+        setIsLoadingReviews(false);
+      }
+    }
+
+    fetchReviews();
+  }, []);
+
+  // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -28,12 +72,12 @@ export default function ReviewsSection() {
     try {
       const formData = new FormData();
       formData.append("name", name);
+      formData.append("role", role);
       formData.append("type", reviewType);
       
       if (reviewType === "text") formData.append("content", content);
       if (reviewType === "video" && videoFile) formData.append("video", videoFile);
 
-      // Call the API route we just made
       const res = await fetch('/api/reviews', { 
         method: 'POST', 
         body: formData 
@@ -43,7 +87,10 @@ export default function ReviewsSection() {
 
       alert("Review submitted! It will appear once approved.");
       setIsModalOpen(false);
-      // Reset form fields here if you want
+      setName("");
+      setRole("");
+      setContent("");
+      setVideoFile(null);
     } catch (error) {
       console.error(error);
       alert("Something went wrong. Please try again.");
@@ -67,32 +114,59 @@ export default function ReviewsSection() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Text Reviews */}
-          <div className="space-y-6">
-            <h4 className="text-xl font-bold flex items-center gap-2 border-b pb-2"><Star className="text-yellow-500 fill-yellow-500" size={20}/> Written Reviews</h4>
-            <div className="grid gap-4">
-              {MOCK_TEXT_REVIEWS.map((r) => (
-                <div key={r.id} className="bg-white/50 backdrop-blur border p-6 rounded-2xl shadow-sm">
-                  <p className="italic mb-4 text-gray-700">"{r.text}"</p>
-                  <p className="font-bold">{r.name} <span className="text-sm font-normal text-gray-500">- {r.role}</span></p>
-                </div>
-              ))}
+        {isLoadingReviews ? (
+           <div className="flex justify-center items-center py-20 opacity-50">
+               <Loader2 className="animate-spin w-8 h-8 mr-2" /> Loading reviews...
+           </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            
+            {/* Text Reviews */}
+            <div className="space-y-6">
+              <h4 className="text-xl font-bold flex items-center gap-2 border-b pb-2">
+                <Star className="text-yellow-500 fill-yellow-500" size={20}/> Written Reviews
+              </h4>
+              <div className="grid gap-4">
+                {textReviews.length === 0 ? (
+                    <p className="text-gray-500 italic">No written reviews yet. Be the first!</p>
+                ) : (
+                    textReviews.map((r) => (
+                      <div key={r.id} className="bg-white/50 backdrop-blur border p-6 rounded-2xl shadow-sm">
+                        <p className="italic mb-4 text-gray-700">"{r.content}"</p>
+                        <p className="font-bold">{r.name}</p>
+                      </div>
+                    ))
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Video Reviews */}
-          <div className="space-y-6">
-            <h4 className="text-xl font-bold flex items-center gap-2 border-b pb-2"><PlayCircle className="text-blue-500" size={20}/> Video Experiences</h4>
-            <div className="grid grid-cols-2 gap-4">
-              {/* Placeholder Video Card */}
-              <div className="bg-gray-900 rounded-2xl aspect-[9/16] relative overflow-hidden group cursor-pointer flex items-center justify-center">
-                 <PlayCircle size={40} className="text-white opacity-50 group-hover:opacity-100 group-hover:scale-110 transition-all" />
-                 <p className="absolute bottom-4 text-white text-sm font-medium">Alex's Setup</p>
+            {/* Video Reviews */}
+            <div className="space-y-6">
+              <h4 className="text-xl font-bold flex items-center gap-2 border-b pb-2">
+                <PlayCircle className="text-blue-500" size={20}/> Video Experiences
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                 {videoReviews.length === 0 ? (
+                     <p className="text-gray-500 italic col-span-2">No video reviews yet. Be the first!</p>
+                 ) : (
+                     videoReviews.map((r) => (
+                        <div key={r.id} className="bg-black rounded-2xl aspect-[9/16] relative overflow-hidden group">
+                           <video 
+                              src={r.content} 
+                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                              controls
+                           />
+                           {/* Gradient overlay for text readability */}
+                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pointer-events-none">
+                              <p className="text-white text-sm font-medium">{r.name}</p>
+                           </div>
+                        </div>
+                     ))
+                 )}
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* --- UPLOAD MODAL --- */}
         {isModalOpen && (
@@ -113,6 +187,11 @@ export default function ReviewsSection() {
                 <div>
                   <label className="text-sm font-bold mb-1 block">Your Name</label>
                   <input required value={name} onChange={e => setName(e.target.value)} className="w-full border rounded-lg p-3" placeholder="John Doe" />
+                </div>
+
+                <div>
+                  <label className="text-sm font-bold mb-1 block">Your Role</label>
+                  <input required value={role} onChange={e => setRole(e.target.value)} className="w-full border rounded-lg p-3" placeholder="Student, Teacher, etc..." />
                 </div>
 
                 {reviewType === "text" ? (

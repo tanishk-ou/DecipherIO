@@ -197,15 +197,29 @@ export default function ReviewsSection() {
                 {reviewType === "text" ? (
                   <div>
                     <label className="text-sm font-bold mb-1 block">Your Experience</label>
-                    <textarea required value={content} onChange={e => setContent(e.target.value)} className="w-full border rounded-lg p-3 min-h-[120px]" placeholder="How has Decipher.io helped you?" />
+                    <textarea required value={content} onChange={e => setContent(e.target.value)} className="w-full border rounded-lg p-3 min-h-[120px]" placeholder="How has Decipher.IO helped you?" />
                   </div>
                 ) : (
                   <div>
                     <label className="text-sm font-bold mb-1 block">Upload Video (Max 50MB)</label>
-                    <div className="border-2 border-dashed rounded-xl p-8 text-center flex flex-col items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors">
+                    {/* Changed div to label to make the whole box clickable */}
+                    <label className="border-2 border-dashed rounded-xl p-8 text-center flex flex-col items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors">
                        <Upload className="text-gray-400" />
-                       <input required type="file" accept="video/mp4,video/webm" onChange={e => setVideoFile(e.target.files?.[0] || null)} className="text-sm w-full max-w-[200px]" />
-                    </div>
+                       
+                       {/* Show the file name if selected, otherwise show prompt */}
+                       <span className="text-sm text-gray-600 font-medium">
+                          {videoFile ? videoFile.name : "Click to browse files"}
+                       </span>
+                       
+                       {/* Hidden actual input, triggered by clicking the label */}
+                       <input 
+                          required 
+                          type="file" 
+                          accept="video/mp4,video/webm" 
+                          onChange={e => setVideoFile(e.target.files?.[0] || null)} 
+                          className="hidden" 
+                       />
+                    </label>
                   </div>
                 )}
 

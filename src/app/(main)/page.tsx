@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import MagicText from "@/components/magic-text"; 
 import ReviewsSection from "@/components/reviews-section";
+import { ChevronRight } from "lucide-react";
 
 export default function Home() {
   return (
@@ -79,9 +80,22 @@ export default function Home() {
               className="text-[1.1em] opacity-90" 
             />
 
-            <Button className="rounded-full px-8 py-6 text-[1.1em] w-fit bg-blue-600 hover:bg-blue-700 shadow-lg text-white mt-4">
-              Add to Chrome
+            {/* Direct Download Button */}
+            <Button asChild className="rounded-full px-8 py-6 text-[1.1em] w-fit bg-blue-600 hover:bg-blue-700 shadow-lg text-white mt-4">
+              <a href="/decipher-extension.zip" download>
+                Download for Chrome
+              </a>
             </Button>
+            
+            <Link 
+              href="/install" 
+              className="group flex items-center gap-1 mt-3 text-[0.95em] font-medium text-gray-500 hover:text-blue-600 transition-colors"
+            >
+              How do I install this?
+              {/* Swapped to Chevron, made slightly smaller, and added a tiny top margin for perfect baseline alignment */}
+              {/* <MoveRight className="w-4 h-4 mt-[1px] transition-transform group-hover:translate-x-1" /> */}
+              <ChevronRight className="w-4 h-4 ml-0.5 mt-[2px] transition-transform group-hover:translate-x-1" />
+            </Link>
           </div>
         </div>
       </section>
@@ -89,25 +103,27 @@ export default function Home() {
       {/* ================= REVIEWS SECTION ================= */}
       <ReviewsSection />
 
-      {/* ================= CONTACT SECTION ================= */}
+      {/* ================= RESOURCE SECTION ================= */}
       <section className="flex items-center justify-center min-h-[50vh]">
         <div className="flex items-center gap-16 max-w-6xl w-full">
           
           <div className="flex flex-col gap-6 max-w-xl">
             <MagicText 
               tag="h3" 
-              text="Contact a Counsellor" 
+              text="ADHD & Dyslexia Resources" 
               className="text-[2.5em] font-bold" 
             />
 
             <div className="space-y-1 text-[1.1em] opacity-90">
-                <MagicText text="For emotional support," />
-                <MagicText text="Coping strategies, and" />
-                <MagicText text="Building self-esteem." />
+                <MagicText text="Curated tools for focus," />
+                <MagicText text="Professional support directories, and" />
+                <MagicText text="Community study strategies." />
             </div>
 
-            <Button className="rounded-full px-8 py-6 text-[1.1em] w-fit bg-orange-500 hover:bg-orange-600 shadow-lg text-white mt-4">
-              Connect
+            <Button asChild className="rounded-full px-8 py-6 text-[1.1em] w-fit bg-orange-500 hover:bg-orange-600 shadow-lg text-white mt-4">
+              <Link href="/resources">
+                Explore Resources
+              </Link>
             </Button>
           </div>
 
@@ -117,7 +133,7 @@ export default function Home() {
                 src="/Counsellor.png" 
                 width={380} 
                 height={380} 
-                alt="Counsellor" 
+                alt="Support Resources" 
                 className="object-contain drop-shadow-xl"
              />
           </div>

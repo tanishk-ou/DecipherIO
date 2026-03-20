@@ -46,6 +46,9 @@ export default function ReviewsSection() {
           .from("reviews")
           .select("*")
           .eq("approved", true)
+          // Sort by your custom number first (1, 2, 3...)
+          .order("display_order", { ascending: true })
+          // If two reviews have the same number (like 99), sort by newest
           .order("created_at", { ascending: false });
 
         if (error) throw error;
@@ -158,18 +161,32 @@ export default function ReviewsSection() {
                      <p className="text-gray-500 italic col-span-2">No video reviews yet. Be the first!</p>
                  ) : (
                      videoReviews.map((r) => (
-                        <div key={r.id} className="bg-black rounded-2xl aspect-[9/16] relative overflow-hidden group">
-                           <video 
+                      <div key={r.id} className="flex flex-col gap-3">
+                        
+                        {/* Video Container */}
+                        <div className="bg-black rounded-2xl aspect-[9/16] relative overflow-hidden group shadow-sm border">
+                          <video 
                               src={r.content} 
-                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
                               controls
-                           />
-                           {/* Gradient overlay for text readability */}
-                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 pointer-events-none">
-                              <p className="text-white text-sm font-medium">{r.name}</p>
-                           </div>
+                          />
                         </div>
-                     ))
+
+                        {/* Name and Role Container (Below Video) */}
+                        <div className="px-2">
+                          <p className="font-bold text-gray-900">
+                            {r.name}
+                            {/* This will only render if r.role exists */}
+                            {r.role && (
+                              <span className="text-sm font-normal text-gray-500 ml-2">
+                                - {r.role}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        
+                      </div>
+                    ))
                  )}
               </div>
             </div>

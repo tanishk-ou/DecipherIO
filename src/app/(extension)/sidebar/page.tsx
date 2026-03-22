@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipBack, SkipForward, Loader2, Settings, FileText, Sparkles, Type, Palette, Mic, Layers, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Loader2, Settings, FileText, Sparkles, Type, Palette, Mic, Layers, ShieldCheck, AlertTriangle, Bold, Italic, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -94,6 +94,45 @@ export default function SidebarPage() {
   const [isBotThinking, setIsBotThinking] = useState(false);
   const [isBotSpeaking, setIsBotSpeaking] = useState(false);
   const [isBotPaused, setIsBotPaused] = useState(false);
+
+  // --- FORMATTING STATE & HANDLERS ---
+  const [highlightMode, setHighlightMode] = useState(false);
+  const [highlights, setHighlights] = useState<Record<number, { bold?: boolean, italic?: boolean, underline?: boolean, color?: string }>>({});
+  const [hoveredSeg, setHoveredSeg] = useState<number | null>(null);
+  const hoverTimeoutRef = useRef<any>(null);
+
+  const toggleFormat = (index: number, key: 'bold' | 'italic' | 'underline' | 'color', value?: string) => {
+    setHighlights(prev => {
+        const current = prev[index] || {};
+        if (key === 'color') return { ...prev, [index]: { ...current, color: current.color === value ? undefined : value } };
+        return { ...prev, [index]: { ...current, [key]: !current[key] } };
+    });
+  };
+
+  const handleMouseEnter = (index: number) => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+      setHoveredSeg(index);
+  };
+
+  const handleMouseLeave = () => {
+      hoverTimeoutRef.current = setTimeout(() => setHoveredSeg(null), 300);
+  };
+
+  const renderFormatToolbar = (index: number) => {
+    const current = highlights[index] || {};
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#eab308"]; 
+    return (
+        <div className="flex items-center gap-2 bg-white border border-gray-200 shadow-xl rounded-lg p-2 z-[70] animate-in fade-in zoom-in-95 duration-200">
+            <button onClick={() => toggleFormat(index, 'bold')} className={`p-1.5 rounded ${current.bold ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Bold size={16}/></button>
+            <button onClick={() => toggleFormat(index, 'italic')} className={`p-1.5 rounded ${current.italic ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Italic size={16}/></button>
+            <button onClick={() => toggleFormat(index, 'underline')} className={`p-1.5 rounded ${current.underline ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Underline size={16}/></button>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
+            {colors.map(c => (
+                <button key={c} onClick={() => toggleFormat(index, 'color', c)} className={`w-5 h-5 rounded-full border-2 ${current.color === c ? 'border-black scale-110' : 'border-transparent hover:scale-110'} transition-transform`} style={{ backgroundColor: c }} />
+            ))}
+        </div>
+    );
+  };
   
   // Refs for Bot
   const recognitionRef = useRef<any>(null);
@@ -470,6 +509,7 @@ export default function SidebarPage() {
                 sourceUrl: pageUrl,
                 summary: summary,
                 segments: segments,
+                highlights: highlights,
                 settings: {
                     fontLabel: font.name,        // e.g., 'mono'
                     fontSize: fontSize,        // e.g., 18
@@ -574,6 +614,17 @@ export default function SidebarPage() {
                    <div className="flex justify-between text-xs opacity-70"><span>Letter Spacing</span><span>{letterSpacing}px</span></div>
                    <Slider min={0} max={5} step={0.5} value={[letterSpacing]} onValueChange={v => setLetterSpacing(v[0])} />
                 </div>
+
+                {/* TEXT FORMATTING TOGGLE */}
+                <div className="pt-2 border-t border-black/10 mt-4">
+                     <label className="flex items-center gap-3 cursor-pointer group">
+                        <input type="checkbox" checked={highlightMode} onChange={e => setHighlightMode(e.target.checked)} className="w-4 h-4 accent-black" />
+                        <span className="text-sm font-bold flex items-center gap-2">
+                            <Type size={14} className={highlightMode ? "text-blue-600" : "text-gray-400"}/> 
+                            Text Formatting Tool
+                        </span>
+                     </label>
+                </div>
             </div>
 
             {/* INTELLIGENCE SETTINGS */}
@@ -638,15 +689,29 @@ export default function SidebarPage() {
                  sentenceFocusMode ? (
                     // FOCUS MODE
                     <div>
+                        {/* UPDATE THIS DIV WITH INLINE STYLES */}
                         <div className={`p-4 rounded-xl border-l-4 shadow-sm bg-black/5 ${
                             confidenceMode && (segments[currentSentenceIndex]?.confidence || 100) < 70 
                             ? "border-red-400 bg-red-50" 
                             : "border-black/20"
-                        }`}>
+                        }`}
+                        style={{
+                            fontWeight: (highlights[currentSentenceIndex] || {}).bold ? 'bold' : 'normal',
+                            fontStyle: (highlights[currentSentenceIndex] || {}).italic ? 'italic' : 'normal',
+                            textDecoration: (highlights[currentSentenceIndex] || {}).underline ? 'underline' : 'none',
+                            color: (highlights[currentSentenceIndex] || {}).color || 'inherit'
+                        }}>
                             <p className="font-medium">
                                 {renderText(segments[currentSentenceIndex]?.simplified || "")}
                             </p>
                         </div>
+                        
+                        {/* ADD THE TOOLBAR HERE */}
+                        {highlightMode && (
+                            <div className="mt-4 flex justify-center">
+                                {renderFormatToolbar(currentSentenceIndex)}
+                            </div>
+                        )}
                          {confidenceMode && (segments[currentSentenceIndex]?.confidence || 100) < 70 && (
                             <p className="text-red-500 text-xs mt-2 flex items-center gap-2"><AlertTriangle size={12}/> Low confidence: Check original.</p>
                          )}
@@ -658,9 +723,27 @@ export default function SidebarPage() {
                         const styleClass = getUnifiedStyle(i, seg.confidence);
                         const needsTooltip = confidenceMode && seg.confidence < 90;
                         
+                        const h = highlights[i] || {};
                         const content = (
-                            <span key={i} className={styleClass}>
+                            <span 
+                                key={i} 
+                                className={`relative inline-block ${styleClass}`}
+                                onMouseEnter={() => handleMouseEnter(i)}
+                                onMouseLeave={handleMouseLeave}
+                                style={{
+                                    fontWeight: h.bold ? 'bold' : 'normal',
+                                    fontStyle: h.italic ? 'italic' : 'normal',
+                                    textDecoration: h.underline ? 'underline' : 'none',
+                                    color: h.color || 'inherit'
+                                }}
+                            >
                                 {renderText(seg.simplified)}{" "}
+                                
+                                {highlightMode && hoveredSeg === i && (
+                                    <div className="absolute top-full left-0 pt-2 z-[60]">
+                                        {renderFormatToolbar(i)}
+                                    </div>
+                                )}
                             </span>
                         );
 

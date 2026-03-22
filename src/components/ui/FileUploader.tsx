@@ -32,7 +32,7 @@ export default function FileUploader({ onFileRead }: FileUploaderProps) {
         <Input
           id="file"
           type="file"
-          accept="application/pdf"
+          accept="application/pdf, image/png, image/jpeg, image/jpg, image/webp"
           onChange={handleFileChange}
           className="cursor-pointer bg-white file:text-blue-600 file:font-semibold"
         />

@@ -24,10 +24,35 @@ export default function UploadPage() {
     if (!file) return;
     
     setIsLoading(true);
-    setStatusText("Analyzing PDF...");
 
     try {
-      const text = await extractTextFromPdf(file);
+      let text = "";
+
+      // Branch 1: It's a PDF (Keep existing logic)
+      if (file.type === "application/pdf") {
+        setStatusText("Analyzing PDF...");
+        text = await extractTextFromPdf(file);
+      } 
+      // Branch 2: It's an Image (Send to new Gemini API)
+      else if (file.type.startsWith("image/")) {
+        setStatusText("Scanning image text...");
+        
+        const formData = new FormData();
+        formData.append("file", file);
+        
+        const response = await fetch("/api/parse-image", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) throw new Error("Image scanning failed.");
+        const data = await response.json();
+        text = data.text;
+      } 
+      // Fallback
+      else {
+        throw new Error("Unsupported file format.");
+      }
 
       if (!text || text.length < 10) {
         throw new Error("Could not extract readable text from this file.");
@@ -57,7 +82,7 @@ export default function UploadPage() {
           </CardTitle>
           <CardDescription className="text-[1.2em] opacity-90">
              <MagicText 
-                text={isLoading ? statusText : "We'll handle the rest! Supports scanned & digital PDFs."} 
+                text={isLoading ? statusText : "We'll handle the rest! Supports PDFs, photos, and scanned images."} 
              />
           </CardDescription>
         </CardHeader>
@@ -79,10 +104,9 @@ export default function UploadPage() {
 
         <CardFooter className="flex justify-center pb-8">
             {!isLoading && (
-                // FIXED: Removed wrapping <p>, passed classes to MagicText
                 <MagicText 
                     className="text-[0.9em] text-gray-400" 
-                    text="Processed locally in your browser for privacy." 
+                    text="PDFs are processed locally. Images are securely processed via AI." 
                 />
             )}
         </CardFooter>

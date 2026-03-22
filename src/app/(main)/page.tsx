@@ -12,7 +12,7 @@ export default function Home() {
     // Transparent background so the Sidebar theme shows through
     <div className="flex flex-col min-h-screen px-10 py-10 transition-colors duration-300">
 
-      {/* ================= PDF UPLOAD SECTION ================= */}
+      {/* ================= UPLOAD SECTION ================= */}
       <section className="flex items-center justify-center min-h-[50vh]">
         <div className="flex items-center gap-16 max-w-6xl w-full">
           
@@ -26,7 +26,7 @@ export default function Home() {
 
             <div className="space-y-4">
               <MagicText 
-                text="Convert text from PDF into a dyslexia-friendly format." 
+                text="Convert text from PDFs, photos, and scanned images into a dyslexia-friendly format." 
                 className="text-[1.1em] opacity-90" 
               />
               <MagicText 
@@ -36,7 +36,8 @@ export default function Home() {
             </div>
 
             <Button asChild className="rounded-full px-8 py-6 text-[1.1em] w-fit shadow-lg hover:scale-105 transition-transform mt-4">
-              <Link href="/upload">Upload PDF</Link>
+              {/* Changed button text to be more inclusive */}
+              <Link href="/upload">Upload File</Link>
             </Button>
           </div>
 
@@ -46,7 +47,7 @@ export default function Home() {
                 src="/card.png" 
                 width={400} 
                 height={400} 
-                alt="Upload PDF" 
+                alt="Upload File or Image" 
                 className="object-contain drop-shadow-xl"
              />
           </div>

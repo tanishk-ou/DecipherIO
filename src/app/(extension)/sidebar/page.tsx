@@ -616,11 +616,16 @@ export default function SidebarPage() {
                 </div>
 
                 {/* TEXT FORMATTING TOGGLE */}
-                <div className="pt-2 border-t border-black/10 mt-4">
-                     <label className="flex items-center gap-3 cursor-pointer group">
-                        <input type="checkbox" checked={highlightMode} onChange={e => setHighlightMode(e.target.checked)} className="w-4 h-4 accent-black" />
-                        <span className="text-sm font-bold flex items-center gap-2">
-                            <Type size={14} className={highlightMode ? "text-blue-600" : "text-gray-400"}/> 
+                <div className="pt-4 mt-2 border-t border-black/10">
+                     <label className="flex items-center gap-3 cursor-pointer group w-full">
+                        <input 
+                            type="checkbox" 
+                            checked={highlightMode} 
+                            onChange={e => setHighlightMode(e.target.checked)} 
+                            className="w-4 h-4 accent-black cursor-pointer" 
+                        />
+                        <span className="text-sm font-semibold flex items-center gap-2 select-none text-gray-800">
+                            <Type size={16} className={highlightMode ? "text-blue-600" : "text-gray-400 transition-colors"}/> 
                             Text Formatting Tool
                         </span>
                      </label>

@@ -3,10 +3,12 @@ import jsPDF from "jspdf";
 // ==========================================
 // 1. FONT CONFIGURATION
 // ==========================================
-const FONT_CONFIG: Record<string, { regular: string; bold: string; pdfName: string }> = {
+const FONT_CONFIG: Record<string, { regular: string; bold: string; italic?: string; bolditalic?: string; pdfName: string }> = {
   Dyslexia: {
     regular: "/fonts/OpenDyslexic-Regular.ttf",
     bold: "/fonts/OpenDyslexic-Bold.ttf",
+    italic: "/fonts/OpenDyslexic-Italic.ttf",
+    bolditalic: "/fonts/OpenDyslexic-Bold-Italic.ttf",
     pdfName: "OpenDyslexic",
   },
   Atkinson: {
@@ -25,6 +27,13 @@ const BUILTIN_FONT_MAP: Record<string, string> = {
   Sans: "helvetica",
   Mono: "courier",
   Serif: "times",
+};
+
+const HEX_TO_RGB: Record<string, [number, number, number]> = {
+    "#ef4444": [239, 68, 68],   // Red
+    "#3b82f6": [59, 130, 246],  // Blue
+    "#10b981": [16, 185, 129],  // Green
+    "#eab308": [234, 179, 8],   // Yellow
 };
 
 // Async Font Fetcher
@@ -50,6 +59,7 @@ interface PDFGenProps {
   sourceUrl?: string;
   summary: string;
   segments: { simplified: string }[];
+  highlights: Record<number, { bold?: boolean; italic?: boolean; color?: string }>; // Add this
   settings: {
     fontLabel: string;
     fontSize: number;
@@ -66,6 +76,7 @@ export const generateSmartPDF = async ({
   title,
   sourceUrl,
   summary,
+  highlights,
   segments,
   settings
 }: PDFGenProps) => {
@@ -102,19 +113,39 @@ export const generateSmartPDF = async ({
       } else {
         hasBold = false; // Fallback if no bold file
       }
+
+      // Register Italic
+      if (config.italic) {
+        const italicB64 = await fetchFontAsBase64(config.italic);
+        if (italicB64) {
+          doc.addFileToVFS(config.pdfName + "-Italic.ttf", italicB64);
+          doc.addFont(config.pdfName + "-Italic.ttf", config.pdfName, "italic");
+        }
+      }
+
+      // Register BoldItalic
+      if (config.bolditalic) {
+        const biB64 = await fetchFontAsBase64(config.bolditalic);
+        if (biB64) {
+          doc.addFileToVFS(config.pdfName + "-BoldItalic.ttf", biB64);
+          doc.addFont(config.pdfName + "-BoldItalic.ttf", config.pdfName, "bolditalic");
+        }
+      }
     }
   }
 
   // Helper to safely switch styles using the CORRECT font
-  const setStyle = (style: "normal" | "bold", size: number, color: [number, number, number]) => {
-    const safeStyle = (style === "bold" && !hasBold) ? "normal" : style;
+  // Replace your current setStyle with this:
+  const setStyle = (style: "normal" | "bold" | "italic" | "bolditalic", size: number, color: [number, number, number]) => {
+    let safeStyle = style;
+    if (!hasBold && style.includes("bold")) safeStyle = style.replace("bold", "") as any || "normal";
+    
     try { doc.setFont(pdfFontName, safeStyle); } 
-    catch { doc.setFont("helvetica", safeStyle); } // Fallback
+    catch { doc.setFont("helvetica", safeStyle); } 
     
     doc.setFontSize(size);
     doc.setTextColor(...color);
     
-    // Apply letter spacing if supported (cleaner look)
     if (typeof (doc as any).setCharSpace === "function") {
       (doc as any).setCharSpace(settings.letterSpacing * 0.4);
     }
@@ -131,16 +162,25 @@ export const generateSmartPDF = async ({
 
   // --- C. TEXT RENDERING ENGINE (Unified) ---
   // This handles Headings, Summary, and Content identically
-  const writeContentBlock = (text: string, isBold: boolean, fontSize: number, useBionic: boolean) => {
+  // --- C. TEXT RENDERING ENGINE (Unified) ---
+  const writeContentBlock = (
+    text: string, 
+    fontStyle: "normal" | "bold" | "italic" | "bolditalic", // Accepts full styles now
+    fontSize: number, 
+    color: [number, number, number], // Accepts custom colors now
+    useBionic: boolean
+  ) => {
     const lineHeight = fontSize * settings.lineHeight;
     
-    setStyle(isBold ? "bold" : "normal", fontSize, [40, 40, 40]);
+    // Uses the passed values instead of hardcoding!
+    setStyle(fontStyle, fontSize, color);
 
     if (useBionic) {
       // Use Bionic Renderer
       writeBionicBlock(
         doc, text, margin, usableWidth, fontSize, lineHeight,
         pdfFontName, (settings.letterSpacing * 0.4), hasBold,
+        fontStyle,
         ensureSpace, () => cursorY, (val) => cursorY = val
       );
     } else {
@@ -193,8 +233,9 @@ export const generateSmartPDF = async ({
 
     // Content (Uses unified writer)
     // We use a slightly smaller font for summary, but apply Bionic logic
+    // Content (Uses unified writer)
     const summarySize = Math.max(settings.fontSize * 0.70, 10);
-    writeContentBlock(summary, false, summarySize, settings.bionicEnabled);
+    writeContentBlock(summary, "normal", summarySize, [40, 40, 40], settings.bionicEnabled);
     
     cursorY += 30; // Gap after summary
     
@@ -211,9 +252,31 @@ export const generateSmartPDF = async ({
 
   const contentSize = Math.max(settings.fontSize * 0.75, 11);
   
-  for (const seg of segments) {
+  // Replace your existing segments loop with this:
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    const h = highlights[i] || {};
+    
     ensureSpace(contentSize * settings.lineHeight);
-    writeContentBlock(seg.simplified, false, contentSize, settings.bionicEnabled);
+    
+    // Determine Font Style
+    let fontStyle: "normal" | "bold" | "italic" | "bolditalic" = "normal";
+    if (h.bold && h.italic) fontStyle = "bolditalic";
+    else if (h.bold) fontStyle = "bold";
+    else if (h.italic) fontStyle = "italic";
+
+    // Determine Color
+    const rgbColor = h.color && HEX_TO_RGB[h.color] ? HEX_TO_RGB[h.color] : [40, 40, 40];
+
+    // Pass everything to the writer!
+    writeContentBlock(
+      seg.simplified, 
+      fontStyle, 
+      contentSize, 
+      rgbColor as [number, number, number], 
+      settings.bionicEnabled
+    );
+    
     cursorY += (contentSize * 0.8); // Paragraph gap
   }
 
@@ -238,10 +301,15 @@ export const generateSmartPDF = async ({
 function writeBionicBlock(
   doc: jsPDF, text: string, x: number, width: number, size: number, 
   leading: number, fontName: string, charSpacing: number, hasBold: boolean,
+  baseStyle: "normal" | "bold" | "italic" | "bolditalic", // <--- NEW PARAMETER
   checkSpace: (n: number) => void, getY: () => number, setY: (v: number) => void
 ) {
   const words = text.split(/\s+/).filter(Boolean);
   let line: string[] = [];
+
+  // Determine what "bold" and "normal" mean in the current context
+  const targetBoldStyle = baseStyle === "italic" || baseStyle === "bolditalic" ? "bolditalic" : "bold";
+  const targetNormalStyle = baseStyle === "italic" || baseStyle === "bolditalic" ? "italic" : "normal";
 
   const flushLine = () => {
     if (line.length === 0) return;
@@ -256,21 +324,21 @@ function writeBionicBlock(
       let boldLen = 0;
       if (len === 1) boldLen = 1;
       else if (len <= 3) boldLen = 1;
-      else if (len <= 6) boldLen = Math.ceil(len * 0.5); // Slightly stronger bionic
+      else if (len <= 6) boldLen = Math.ceil(len * 0.5); 
       else boldLen = Math.ceil(len * 0.4);
 
       const boldPart = word.slice(0, boldLen);
       const normalPart = word.slice(boldLen);
 
       // 1. Draw Bold Part
-      try { doc.setFont(fontName, hasBold ? "bold" : "normal"); } catch {}
+      try { doc.setFont(fontName, hasBold ? targetBoldStyle : targetNormalStyle); } catch {}
       doc.setFontSize(size);
       doc.text(boldPart, curX, y);
       curX += doc.getTextWidth(boldPart);
 
       // 2. Draw Normal Part
       if (normalPart) {
-        try { doc.setFont(fontName, "normal"); } catch {}
+        try { doc.setFont(fontName, targetNormalStyle); } catch {}
         doc.setFontSize(size);
         doc.text(normalPart, curX, y);
         curX += doc.getTextWidth(normalPart);
@@ -288,7 +356,7 @@ function writeBionicBlock(
 
   for (const word of words) {
     const testLine = [...line, word].join(" ");
-    try { doc.setFont(fontName, "normal"); } catch {} // Measure using normal weight
+    try { doc.setFont(fontName, targetNormalStyle); } catch {} 
     
     if (doc.getTextWidth(testLine) > width && line.length > 0) {
       flushLine();

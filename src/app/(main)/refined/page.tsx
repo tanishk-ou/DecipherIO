@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, SkipBack, SkipForward, Loader2, Layers, ShieldCheck, AlertTriangle, Mic } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Loader2, Layers, ShieldCheck, AlertTriangle, Mic, Bold, Italic, Underline, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -48,6 +48,10 @@ export default function Refined() {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [sentenceFocusMode, setSentenceFocusMode] = useState(false);
   const [confidenceMode, setConfidenceMode] = useState(false); 
+  const [highlightMode, setHighlightMode] = useState(false);
+  const [highlights, setHighlights] = useState<Record<number, { bold?: boolean, italic?: boolean, underline?: boolean, color?: string }>>({});
+  const [hoveredSeg, setHoveredSeg] = useState<number | null>(null);
+  const hoverTimeoutRef = useRef<any>(null);
 
   // Audio/Visuals
   const [isPlaying, setIsPlaying] = useState(false);
@@ -227,6 +231,7 @@ export default function Refined() {
         sourceUrl: "Uploaded PDF",
         summary: summary,
         segments: segments,
+        highlights: highlights,
         settings: {
             fontLabel: fontLabel,
             fontSize: currentFontSize,
@@ -518,6 +523,45 @@ export default function Refined() {
         return base + "hover:bg-gray-100 text-gray-800 border-b-2 border-transparent";
     }
   };
+  
+  const toggleFormat = (index: number, key: 'bold' | 'italic' | 'underline' | 'color', value?: string) => {
+    setHighlights(prev => {
+      const current = prev[index] || {};
+      if (key === 'color') {
+        // Toggle color off if clicking the same one
+        return { ...prev, [index]: { ...current, color: current.color === value ? undefined : value } };
+      }
+        return { ...prev, [index]: { ...current, [key]: !current[key] } };
+    });
+  };
+
+const handleMouseEnter = (index: number) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setHoveredSeg(index);
+};
+
+const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+        setHoveredSeg(null);
+    }, 300); // 300ms grace period to reach the menu
+};
+
+  const renderFormatToolbar = (index: number) => {
+    const current = highlights[index] || {};
+    const colors = ["#ef4444", "#3b82f6", "#10b981", "#eab308"]; // Red, Blue, Green, Yellow
+    
+    return (
+      <div className="flex items-center gap-2 bg-white border border-gray-200 shadow-xl rounded-lg p-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+        <button onClick={() => toggleFormat(index, 'bold')} className={`p-1.5 rounded ${current.bold ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Bold size={16}/></button>
+        <button onClick={() => toggleFormat(index, 'italic')} className={`p-1.5 rounded ${current.italic ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Italic size={16}/></button>
+        <button onClick={() => toggleFormat(index, 'underline')} className={`p-1.5 rounded ${current.underline ? 'bg-gray-200' : 'hover:bg-gray-100'}`}><Underline size={16}/></button>
+        <div className="w-px h-5 bg-gray-300 mx-1" />
+        {colors.map(c => (
+          <button key={c} onClick={() => toggleFormat(index, 'color', c)} className={`w-5 h-5 rounded-full border-2 ${current.color === c ? 'border-black scale-110' : 'border-transparent hover:scale-110'} transition-transform`} style={{ backgroundColor: c }} />
+        ))}
+      </div>
+    );
+  };
 
   return (
     <TooltipProvider>
@@ -565,6 +609,22 @@ export default function Refined() {
                         </span>
                     </div>
                  </label>
+            </div>
+
+            {/* FORMATTING TOGGLE */}
+            <div className="pt-6 border-t">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                    <input type="checkbox" checked={highlightMode} onChange={e => setHighlightMode(e.target.checked)} className="w-5 h-5 accent-black" />
+                    <div className="flex flex-col">
+                        <span className="text-[1.1em] font-bold flex items-center gap-2">
+                            <Type size={18} className={highlightMode ? "text-blue-600" : "text-gray-400"}/> 
+                            <MagicText text="Text Formatting" />
+                        </span>
+                        <span className="text-xs text-gray-500">
+                            <MagicText text="Bold, color, and highlight text" />
+                        </span>
+                    </div>
+                </label>
             </div>
 
             {/* 3. IRLEN OVERLAYS */}
@@ -656,13 +716,27 @@ export default function Refined() {
                          : confidenceMode && (segments[currentSentenceIndex]?.confidence || 100) < 90
                          ? "bg-yellow-50 border-yellow-400"
                          : "bg-white border-blue-400" /* Default clean style */
-                     }`}>
+                     }`}
+                     // NEW: Added the inline styles here, checking the highlights state directly!
+                     style={{
+                         fontWeight: (highlights[currentSentenceIndex] || {}).bold ? 'bold' : 'normal',
+                         fontStyle: (highlights[currentSentenceIndex] || {}).italic ? 'italic' : 'normal',
+                         textDecoration: (highlights[currentSentenceIndex] || {}).underline ? 'underline' : 'none',
+                         color: (highlights[currentSentenceIndex] || {}).color || 'inherit'
+                     }}>
                         <div className={`font-medium text-[1.4em] ${
                             confidenceMode && (segments[currentSentenceIndex]?.confidence || 100) < 70 ? "text-red-900" : "text-gray-900"
                         }`}>
                             <MagicText tag="span" text={segments[currentSentenceIndex]?.simplified || ""} />
                         </div>
                      </div>
+
+                     {/* NEW: The Highlight Toolbar inserted right below the focus box */}
+                     {highlightMode && (
+                         <div className="mt-4 flex justify-center">
+                             {renderFormatToolbar(currentSentenceIndex)}
+                         </div>
+                     )}
                      
                      <MagicText 
                         className="text-[0.9em] text-gray-400 mt-2 text-center"
@@ -685,14 +759,30 @@ export default function Refined() {
                         const needsTooltip = confidenceMode && seg.confidence < 90;
 
                         // 2. Wrap content based on tooltip necessity
+                        // Replace your current `const content = (...)` block inside segments.map with this:
+                        const h = highlights[i] || {};
                         const content = (
                             <span 
                                 key={i} 
-                                className={segmentStyle}
+                                className={`relative inline-block ${segmentStyle}`}
+                                // NEW: Using the delay handlers
+                                onMouseEnter={() => handleMouseEnter(i)}
+                                onMouseLeave={handleMouseLeave}
+                                style={{
+                                    fontWeight: h.bold ? 'bold' : 'normal',
+                                    fontStyle: h.italic ? 'italic' : 'normal',
+                                    textDecoration: h.underline ? 'underline' : 'none',
+                                    color: h.color || 'inherit'
+                                }}
                             >
-                                <MagicText tag="span" text={seg.simplified} />
-                                {/* Trailing space ensures sentences don't fuse */}
-                                {" "} 
+                                <MagicText tag="span" text={seg.simplified} />{" "}
+                                
+                                {/* NEW: Changed mt-2 to pt-2 to create an invisible hover bridge, and bumped z-index to 60 */}
+                                {highlightMode && hoveredSeg === i && (
+                                    <div className="absolute top-full left-0 pt-2 z-[60]">
+                                        {renderFormatToolbar(i)}
+                                    </div>
+                                )}
                             </span>
                         );
 

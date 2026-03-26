@@ -5,7 +5,7 @@ import { createWorker } from "tesseract.js";
 // This prevents the "worker not found" and "version mismatch" errors
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
-export async function extractTextFromPdf(file: File): Promise<string> {
+export async function extractTextFromPdf(file: File, lang: string = "eng+hin"): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   
   // Load the PDF
@@ -30,15 +30,15 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   // (Less than 50 chars usually means it's a scanned image)
   if (totalChars < 50) {
     console.log("Text is missing or too short. Switching to OCR mode...");
-    return await performOCR(pdf);
+    return await performOCR(pdf, lang);
   }
 
   return fullText.trim();
 }
 
 // Helper: OCR Logic
-async function performOCR(pdf: any): Promise<string> {
-  const worker = await createWorker("eng");
+async function performOCR(pdf: any, lang: string = "eng+hin"): Promise<string> {
+  const worker = await createWorker(lang);
   let ocrText = "";
 
   for (let i = 1; i <= pdf.numPages; i++) {

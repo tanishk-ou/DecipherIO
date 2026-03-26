@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
   const text = searchParams.get("text");
   
   // 1. Get new parameters (with defaults)
-  const voiceName = searchParams.get("voice") || "en-US-Journey-F"; // Default Female
+  const languageCode = searchParams.get("languageCode") || "hi-IN";
+  const voiceName = searchParams.get("voice") || "hi-IN-Standard-A"; // Default Hindi voice
   const speed = parseFloat(searchParams.get("speed") || "1.0");     // Default 1.0x
 
   if (!text) return new Response(JSON.stringify({ error: "Text is required" }), { status: 400 });
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     const request = {
       input: { text: text },
       voice: { 
-        languageCode: "en-US", 
+        languageCode: languageCode,
         name: voiceName 
       },
       audioConfig: { 

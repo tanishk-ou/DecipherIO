@@ -7,17 +7,12 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; 
+import { DEFAULT_LANGUAGE, getTTSVoices, isSupportedLanguage, type SupportedLanguage } from "@/lib/language-config";
+
 import MagicText from "@/components/magic-text";
 import { Download } from "lucide-react";
 import { generateSmartPDF } from "@/lib/pdf-gen";
 import { X, RotateCcw, MessageSquare, Volume2, StopCircle } from "lucide-react";
-
-const VOICES = [
-  { id: "en-US-Journey-F", name: "Journey (Female)" },
-  { id: "en-US-Journey-D", name: "Journey (Male)" },
-  { id: "en-US-Studio-O", name: "Studio (Female)" },
-  { id: "en-US-Studio-M", name: "Studio (Male)" },
-];
 
 const OVERLAYS = [
   { name: "None", value: "none", color: "transparent" },
@@ -56,12 +51,21 @@ export default function Refined() {
   // Audio/Visuals
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
-  const [voice, setVoice] = useState("en-US-Journey-F"); 
+  const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(DEFAULT_LANGUAGE);
+  const [targetLanguage, setTargetLanguage] = useState<SupportedLanguage>(DEFAULT_LANGUAGE);
+  const [voice, setVoice] = useState(getTTSVoices(DEFAULT_LANGUAGE)[0]?.voiceId || "hi-IN-Standard-A"); 
   const [speed, setSpeed] = useState(1.0);
   const [overlay, setOverlay] = useState(OVERLAYS[0]);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCache = useRef<Record<number, string>>({});
+
+  useEffect(() => {
+    const voices = getTTSVoices(targetLanguage);
+    if (voices.length && !voices.some((v) => v.voiceId === voice)) {
+      setVoice(voices[0].voiceId);
+    }
+  }, [targetLanguage]);
 
   // --- BOT STATE ---
   const [isListening, setIsListening] = useState(false);
@@ -78,8 +82,17 @@ export default function Refined() {
 
   // --- 1. INITIALIZATION ---
   useEffect(() => {
-    const saved = sessionStorage.getItem("pdfText");
-    if (saved) setSourceText(saved);
+    const savedText = sessionStorage.getItem("pdfText");
+    const savedLang = sessionStorage.getItem("pdfLanguage");
+    if (savedText) setSourceText(savedText);
+    if (savedLang && isSupportedLanguage(savedLang)) {
+        setSourceLanguage(savedLang as SupportedLanguage);
+        setTargetLanguage(savedLang as SupportedLanguage); // Set target to match upload initially
+
+        // FIX: Instantly set the correct voice to prevent the cache from wiping!
+        const voices = getTTSVoices(savedLang as SupportedLanguage);
+        if (voices.length > 0) setVoice(voices[0].voiceId);
+    }
   }, []);
 
   // --- 2. AI FETCHING ---
@@ -88,11 +101,14 @@ export default function Refined() {
     
     const fetchAI = async () => {
         setIsLoadingAI(true);
+        // --- ADD THESE TWO LINES ---
+        setSegments([]); // Clears text so loading state shows
+        setSummary("");  // Clears summary so loading state shows
         try {
             const res = await fetch("/api/ai-process", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ inputText: sourceText, readingLevel: level })
+                body: JSON.stringify({ inputText: sourceText, readingLevel: level, sourceLanguage, targetLanguage })
             });
             const data = await res.json();
 
@@ -124,7 +140,7 @@ export default function Refined() {
         finally { setIsLoadingAI(false); }
     };
     fetchAI();
-  }, [sourceText, level]);
+  }, [sourceText, level, targetLanguage]);
 
   // --- 3. TTS HANDLING ---
   useEffect(() => {
@@ -193,6 +209,37 @@ export default function Refined() {
     hotReloadAudio();
   }, [voice, speed]); 
 
+  // --- HARD RESET ON LANGUAGE CHANGE ---
+  useEffect(() => {
+    // 1. Kill all playing audio instantly and DUMP the old file
+    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = ""; // <--- FIX: Rip out the old audio file
+        audioRef.current.load();                 // <--- FIX: Force the browser to reset the player
+    }
+    
+    // 2. Kill the bot audio
+    if ((window as any).botAudio) {
+        (window as any).botAudio.pause();
+        (window as any).botAudio = null;
+    }
+
+    // 3. Wipe the audio cache and reset the sentence cursor
+    setIsPlaying(false);
+    setIsBuffering(false);
+    audioCache.current = {};
+    setCurrentSentenceIndex(0);
+
+    // 4. Wipe the bot bubble and state
+    setBotResponse("");
+    setIsBotSpeaking(false);
+    setIsBotPaused(false);
+    setIsBotThinking(false);
+    
+  }, [targetLanguage]);
+
   const handleDownload = () => {
     // 1. Get Filename (saved during upload)
     const savedName = sessionStorage.getItem("pdfName") || "Uploaded Document";
@@ -244,7 +291,7 @@ export default function Refined() {
   // --- 4. AUDIO SYSTEM ---
   const fetchAudioBlob = async (text: string) => {
     try {
-        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}`);
+        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&languageCode=${targetLanguage}`);
         const data = await res.json();
         if (data.base64Chunks?.[0]) {
             const byteChars = atob(data.base64Chunks[0].base64);
@@ -277,9 +324,24 @@ export default function Refined() {
   };
 
   const togglePlayPause = () => {
-    if (isPlaying) { audioRef.current?.pause(); setIsPlaying(false); }
-    else if (audioRef.current?.src && !audioRef.current.ended) { audioRef.current.play(); setIsPlaying(true); }
-    else handlePlay(currentSentenceIndex);
+    if (isPlaying) { 
+        audioRef.current?.pause(); 
+        setIsPlaying(false); 
+    }
+    // FIX: Ensure the loaded audio exactly matches the fresh language cache!
+    else if (
+        audioRef.current && 
+        audioCache.current[currentSentenceIndex] && 
+        audioRef.current.src === audioCache.current[currentSentenceIndex] && 
+        !audioRef.current.ended
+    ) { 
+        audioRef.current.play(); 
+        setIsPlaying(true); 
+    }
+    else {
+        // If the cache was wiped by a language change, it fetches the new audio!
+        handlePlay(currentSentenceIndex);
+    }
   };
 
   const changeSentence = (newIndex: number) => {
@@ -312,7 +374,7 @@ export default function Refined() {
 
     try {
         // Fetch audio with current settings
-        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}`);
+        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&languageCode=${targetLanguage}`);
         const data = await res.json();
 
         // B. THE MAGIC CHECK
@@ -397,11 +459,12 @@ export default function Refined() {
 
         const res = await fetch("/api/ai-process", {
             method: "POST",
+            headers: { "Content-Type": "application/json" }, // <--- Added Headers
             body: JSON.stringify({ 
                 mode: "chat", 
                 inputText: question, 
-                // Context is crucial: we pass the simplified text so the bot knows what you are reading
-                context: segments.map(s => s.simplified).join(" ") 
+                context: segments.map(s => s.simplified).join(" "),
+                targetLanguage: targetLanguage // <--- THIS FIXES THE BOT LANGUAGE
             })
         });
         const { answer } = await res.json();
@@ -418,6 +481,9 @@ export default function Refined() {
   const recognitionRef = useRef<any>(null);
 
   const handleVoiceChat = () => {
+    setBotResponse("");
+    stopBotAudio();
+
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) return alert("Browser does not support voice input.");
 
@@ -437,7 +503,7 @@ export default function Refined() {
 
     // 3. Setup New Instance
     const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
+    recognition.lang = 'hi-IN';
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -657,8 +723,22 @@ const handleMouseLeave = () => {
                     </span>
                  </label>
             </div>
+
+            {/* 6. LANGUAGE */}
+            <div className="pt-6 border-t space-y-2">
+                <Label className="text-[1.1em] font-bold mb-2">Language</Label>
+                <Select value={targetLanguage} onValueChange={(value) => setTargetLanguage(value as SupportedLanguage)}>
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="en-US">English</SelectItem>
+                        <SelectItem value="hi-IN">हिंदी (Hindi)</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
             
-            {/* 6. VOICE & SPEED */}
+            {/* 7. VOICE & SPEED */}
             <div className="pt-6 border-t space-y-4">
                  <div className="flex justify-between items-center">
                     <Label className="text-[1.1em] font-bold flex items-center gap-2">
@@ -671,9 +751,9 @@ const handleMouseLeave = () => {
                         <SelectValue placeholder="Select a voice" />
                     </SelectTrigger>
                     <SelectContent>
-                        {VOICES.map(v => (
-                            <SelectItem key={v.id} value={v.id}>
-                                <MagicText text={v.name} />
+                        {getTTSVoices(targetLanguage).map(v => (
+                            <SelectItem key={v.voiceId} value={v.voiceId}>
+                                <MagicText text={v.displayName} />
                             </SelectItem>
                         ))}
                     </SelectContent>

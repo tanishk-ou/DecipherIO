@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
+    const language = (formData.get("language")?.toString() || "hi-IN").trim();
 
     if (!file) {
       return NextResponse.json({ error: "No image uploaded" }, { status: 400 });
@@ -70,26 +71,27 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const base64String = Buffer.from(arrayBuffer).toString("base64");
 
-    const prompt = `Extract all readable text from this image perfectly. 
-    Maintain paragraph structures if possible. 
+    const prompt = `Extract all readable text from this image perfectly in its original language.
+    Maintain paragraph structures if possible.
     Only return the extracted text, do not add any markdown formatting, commentary, or introduction.`;
 
     // Use the fallback logic
     const { text, modelUsed } = await generateOCRWithFallback(
-      base64String, 
-      file.type, 
+      base64String,
+      file.type,
       prompt
     );
 
-    return NextResponse.json({ 
-      text: text.trim(), 
-      modelUsed 
+    return NextResponse.json({
+      text: text.trim(),
+      modelUsed,
+      language,
     });
 
   } catch (error: any) {
     console.error("Error parsing image:", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to parse image" }, 
+      { error: error?.message || "Failed to parse image" },
       { status: 500 }
     );
   }

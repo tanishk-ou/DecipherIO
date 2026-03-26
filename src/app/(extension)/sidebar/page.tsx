@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; 
 import { toBionic } from "@/lib/bionic";
+import { DEFAULT_LANGUAGE, getTTSVoices, getTesseractCode, isSupportedLanguage, type SupportedLanguage } from "@/lib/language-config";
 import { Download, RotateCcw, MessageSquare, X } from "lucide-react"; // Icon
 import { generateSmartPDF } from "@/lib/pdf-gen"; // Our new tool
 
@@ -39,12 +40,6 @@ const FONTS = [
   { name: "Verdana", value: "verdana", family: "Verdana, sans-serif" },
 ];
 
-const VOICES = [
-  { id: "en-US-Journey-F", name: "Journey (Female)" },
-  { id: "en-US-Journey-D", name: "Journey (Male)" },
-  { id: "en-US-Studio-O", name: "Studio (Female)" },
-  { id: "en-US-Studio-M", name: "Studio (Male)" },
-];
 
 type Segment = {
   original: string;
@@ -64,10 +59,12 @@ export default function SidebarPage() {
 
   // Settings
   const [level, setLevel] = useState("moderate");
+  const [sourceLanguage, setSourceLanguage] = useState<SupportedLanguage>(DEFAULT_LANGUAGE);
+  const [targetLanguage, setTargetLanguage] = useState<SupportedLanguage>(DEFAULT_LANGUAGE);
   const [sentenceFocusMode, setSentenceFocusMode] = useState(false);
   const [bionicMode, setBionicMode] = useState(false);
   const [speed, setSpeed] = useState(1.0);
-  const [voice, setVoice] = useState("en-US-Journey-F"); 
+  const [voice, setVoice] = useState(getTTSVoices(DEFAULT_LANGUAGE)[0]?.voiceId || "hi-IN-Standard-A"); 
   const [confidenceMode, setConfidenceMode] = useState(false); 
 
   // Visuals
@@ -100,6 +97,13 @@ export default function SidebarPage() {
   const [highlights, setHighlights] = useState<Record<number, { bold?: boolean, italic?: boolean, underline?: boolean, color?: string }>>({});
   const [hoveredSeg, setHoveredSeg] = useState<number | null>(null);
   const hoverTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    const voices = getTTSVoices(targetLanguage);
+    if (voices.length && !voices.some((v) => v.voiceId === voice)) {
+      setVoice(voices[0].voiceId);
+    }
+  }, [targetLanguage]);
 
   const toggleFormat = (index: number, key: 'bold' | 'italic' | 'underline' | 'color', value?: string) => {
     setHighlights(prev => {
@@ -156,9 +160,21 @@ export default function SidebarPage() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === "DECIPHER_TEXT") {
-        setSourceText(event.data.text);
+        const text = event.data.text;
+        setSourceText(text);
         setPageTitle(event.data.title); 
         setPageUrl(event.data.url);
+
+        // NEW: Auto-detect language
+        const isHindi = /[\u0900-\u097F]/.test(text);
+        const detectedLang = isHindi ? "hi-IN" : "en-US";
+        
+        setSourceLanguage(detectedLang as SupportedLanguage);
+        setTargetLanguage(detectedLang as SupportedLanguage);
+
+        // Instantly set the correct voice to prevent cache wiping
+        const voices = getTTSVoices(detectedLang as SupportedLanguage);
+        if (voices.length > 0) setVoice(voices[0].voiceId);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -178,11 +194,13 @@ export default function SidebarPage() {
     if (!sourceText) return;
     const fetchAI = async () => {
         setIsLoadingAI(true);
+        setSegments([]); // NEW: Clears text so loading state shows
+        setSummary("");  // NEW: Clears summary so loading state shows
         try {
-            const res = await fetch("/api/ai-process", {
+            const res = await fetch(`${API_BASE}/api/ai-process`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ inputText: sourceText, readingLevel: level })
+                body: JSON.stringify({ inputText: sourceText, readingLevel: level, sourceLanguage, targetLanguage })
             });
             const data = await res.json();
             if (Array.isArray(data.rephrased)) {
@@ -195,7 +213,33 @@ export default function SidebarPage() {
         finally { setIsLoadingAI(false); }
     };
     fetchAI();
-  }, [sourceText, level]);
+  }, [sourceText, level, targetLanguage]);
+
+  // --- HARD RESET ON LANGUAGE CHANGE ---
+  useEffect(() => {
+    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = "";
+        audioRef.current.load();
+    }
+    
+    if ((window as any).botAudio) {
+        (window as any).botAudio.pause();
+        (window as any).botAudio = null;
+    }
+
+    setIsPlaying(false);
+    setIsBuffering(false);
+    audioCache.current = {};
+    setCurrentSentenceIndex(0);
+
+    setBotResponse("");
+    setIsBotSpeaking(false);
+    setIsBotPaused(false);
+    setIsBotThinking(false);
+  }, [targetLanguage]);
 
   // --- 4. TTS HANDLING ---
   
@@ -245,7 +289,7 @@ export default function SidebarPage() {
   // --- AUDIO LOGIC ---
   const fetchAudioBlob = async (text: string) => {
     try {
-        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}`);
+        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&languageCode=${targetLanguage}`);
         const data = await res.json();
         if (data.base64Chunks?.[0]) {
             const byteChars = atob(data.base64Chunks[0].base64);
@@ -278,9 +322,22 @@ export default function SidebarPage() {
   };
 
   const togglePlayPause = () => {
-    if (isPlaying) { audioRef.current?.pause(); setIsPlaying(false); }
-    else if (audioRef.current?.src && !audioRef.current.ended) { audioRef.current.play(); setIsPlaying(true); }
-    else handlePlay(currentSentenceIndex);
+    if (isPlaying) { 
+        audioRef.current?.pause(); 
+        setIsPlaying(false); 
+    }
+    else if (
+        audioRef.current && 
+        audioCache.current[currentSentenceIndex] && 
+        audioRef.current.src === audioCache.current[currentSentenceIndex] && 
+        !audioRef.current.ended
+    ) { 
+        audioRef.current.play(); 
+        setIsPlaying(true); 
+    }
+    else {
+        handlePlay(currentSentenceIndex);
+    }
   };
 
   const changeSentence = (newIndex: number) => {
@@ -315,7 +372,7 @@ export default function SidebarPage() {
 
     try {
         // Uses your voice/speed state + API_BASE
-        const res = await fetch(`${API_BASE}/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}`);
+        const res = await fetch(`${API_BASE}/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&speed=${speed}&languageCode=${targetLanguage}`);
         const data = await res.json();
 
         if (myId !== botGenId.current) return; // Cancel if new request came in
@@ -354,7 +411,8 @@ export default function SidebarPage() {
                 mode: "chat", 
                 inputText: question, 
                 // Context from current segments
-                context: segments.map(s => s.simplified).join(" ") 
+                context: segments.map(s => s.simplified).join(" "),
+                targetLanguage: targetLanguage
             })
         });
         const { answer } = await res.json();
@@ -371,6 +429,8 @@ export default function SidebarPage() {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) return alert("Browser does not support voice input.");
 
+    setBotResponse("");
+
     // A. Clean up previous instances
     if (recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {}
@@ -379,10 +439,13 @@ export default function SidebarPage() {
 
     // B. Stop any playing audio
     window.speechSynthesis.cancel();
-    if ((window as any).botAudio) (window as any).botAudio.pause();
+    if ((window as any).botAudio) {
+        (window as any).botAudio.pause();
+        (window as any).botAudio = null;
+    }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
+    recognition.lang = 'hi-IN';
     recognition.continuous = false;
     recognition.interimResults = false;
     recognitionRef.current = recognition;
@@ -616,19 +679,22 @@ export default function SidebarPage() {
                 </div>
 
                 {/* TEXT FORMATTING TOGGLE */}
-                <div className="pt-4 mt-2 border-t border-black/10">
-                     <label className="flex items-center gap-3 cursor-pointer group w-full">
+                <div className="pt-2"> {/* Changed from pt-4 mt-2 border-t to match pt-2 */}
+                    <label className="flex items-center gap-3 cursor-pointer group">
                         <input 
                             type="checkbox" 
                             checked={highlightMode} 
                             onChange={e => setHighlightMode(e.target.checked)} 
                             className="w-4 h-4 accent-black cursor-pointer" 
                         />
-                        <span className="text-sm font-semibold flex items-center gap-2 select-none text-gray-800">
-                            <Type size={16} className={highlightMode ? "text-blue-600" : "text-gray-400 transition-colors"}/> 
+                        <span className="text-sm font-bold flex items-center gap-2 select-none"> {/* Changed font-semibold to font-bold */}
+                            <Type 
+                                size={14} // Changed from 16 to 14
+                                className={highlightMode ? "text-blue-600" : "text-gray-400"} // Removed transition-colors
+                            /> 
                             Text Formatting Tool
                         </span>
-                     </label>
+                    </label>
                 </div>
             </div>
 
@@ -666,6 +732,20 @@ export default function SidebarPage() {
                    <input type="checkbox" checked={bionicMode} onChange={e => setBionicMode(e.target.checked)} className="w-4 h-4 accent-black" />
                 </div>
 
+                {/* UNIFIED LANGUAGE SELECTOR */}
+                <div className="pt-2 border-t border-black/10">
+                    <Label className="text-xs opacity-70 mb-2 block">Language</Label>
+                    <Select value={targetLanguage} onValueChange={(value) => setTargetLanguage(value as SupportedLanguage)}>
+                        <SelectTrigger className="w-full bg-white/50 border-black/20">
+                            <SelectValue placeholder="Select Language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="en-US">English</SelectItem>
+                            <SelectItem value="hi-IN">हिंदी (Hindi)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 <div className="pt-2">
                     <Label className="text-xs opacity-70 mb-2 block">Narrator Voice</Label>
                     <Select value={voice} onValueChange={setVoice}>
@@ -673,8 +753,8 @@ export default function SidebarPage() {
                             <SelectValue placeholder="Select Voice" />
                         </SelectTrigger>
                         <SelectContent>
-                            {VOICES.map(v => (
-                                <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                            {getTTSVoices(targetLanguage).map(v => (
+                                <SelectItem key={v.voiceId} value={v.voiceId}>{v.displayName}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>

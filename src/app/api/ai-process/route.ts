@@ -61,18 +61,22 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { inputText, readingLevel, mode, context } = body;
+    const sourceLanguage = (body.sourceLanguage || 'hi-IN').toString();
+    const targetLanguage = (body.targetLanguage || 'hi-IN').toString();
 
     // --- FEATURE: CHAT BOT MODE ---
     if (mode === "chat") {
       if (!inputText) return NextResponse.json({ error: "No input provided" }, { status: 400 });
 
       const chatPrompt = `
-        You are an expert accessibility assistant for a user with dyslexia. 
+        You are an expert accessibility assistant for a user with dyslexia.
+        Target Language: ${targetLanguage === 'hi-IN' ? 'Hindi' : 'English'}
         Current Document Context: "${context ? context.slice(0, 5000) : "No context provided."}"
         
         User Question: "${inputText}"
         
-        Task: Provide a helpful, kind, and CONCISE answer (max 2 sentences). 
+        Task: Provide a helpful, kind, and CONCISE answer (max 2 sentences).
+        You MUST answer entirely in the Target Language (${targetLanguage === 'hi-IN' ? 'Hindi' : 'English'}).
         Do not use complex words. Speak directly to the user.
       `;
 
@@ -89,19 +93,20 @@ export async function POST(req: Request) {
     if (readingLevel === 'severe') complexityInstruction = "Simplify A LOT. Basic words only. Short sentences. Explain like I'm 5.";
 
     const prompt = `
-      You are an expert accessibility assistant. 
-      Task: Simplify the text below.
+      You are an expert accessibility assistant.
+      Target Language: ${targetLanguage === 'hi-IN' ? 'Hindi' : 'English'}
+      Task: Simplify the text below and TRANSLATE it to the Target Language if it is not already in it.
       Level: ${readingLevel.toUpperCase()} -> ${complexityInstruction}
-      
+
       CRITICAL OUTPUT FORMAT:
       Return a single JSON OBJECT with two keys:
       1. "rephrased": A JSON ARRAY where each object has:
          - "original": The EXACT sentence from the source text.
-         - "simplified": Your rewritten version.
-      2. "summary": A concise paragraph summarizing the entire text (max 3 sentences).
-      
+         - "simplified": Your rewritten/translated version in the Target Language.
+      2. "summary": A concise paragraph summarizing the entire text (max 3 sentences) in the Target Language.
+
       SOURCE TEXT:
-      "${inputText.slice(0, 4000)}" 
+      "${inputText.slice(0, 4000)}"
     `;
 
     const { text, modelUsed } = await generateWithFallback(prompt);

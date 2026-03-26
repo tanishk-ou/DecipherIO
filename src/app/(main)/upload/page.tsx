@@ -18,7 +18,7 @@ import MagicText from "@/components/magic-text";
 export default function UploadPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [statusText, setStatusText] = useState(""); 
+  const [statusText, setStatusText] = useState("");
 
   const handleFileProcess = async (file: File) => {
     if (!file) return;
@@ -28,38 +28,33 @@ export default function UploadPage() {
     try {
       let text = "";
 
-      // Branch 1: It's a PDF (Keep existing logic)
       if (file.type === "application/pdf") {
         setStatusText("Analyzing PDF...");
-        text = await extractTextFromPdf(file);
+        text = await extractTextFromPdf(file, "eng+hin");
       } 
-      // Branch 2: It's an Image (Send to new Gemini API)
       else if (file.type.startsWith("image/")) {
         setStatusText("Scanning image text...");
-        
         const formData = new FormData();
         formData.append("file", file);
+        // Note: We no longer append language here!
         
-        const response = await fetch("/api/parse-image", {
-          method: "POST",
-          body: formData,
-        });
-
+        const response = await fetch("/api/parse-image", { method: "POST", body: formData });
         if (!response.ok) throw new Error("Image scanning failed.");
         const data = await response.json();
         text = data.text;
       } 
-      // Fallback
-      else {
-        throw new Error("Unsupported file format.");
-      }
+      else throw new Error("Unsupported file format.");
 
-      if (!text || text.length < 10) {
-        throw new Error("Could not extract readable text from this file.");
-      }
+      if (!text || text.length < 10) throw new Error("Could not extract readable text from this file.");
+
+      // --- NEW: AUTO-DETECT LANGUAGE ---
+      // If the text contains Devanagari characters, it's Hindi. Otherwise, English.
+      const isHindi = /[\u0900-\u097F]/.test(text);
+      const detectedLang = isHindi ? "hi-IN" : "en-US";
 
       sessionStorage.setItem("pdfText", text);
       sessionStorage.setItem("pdfName", file.name.replace(/\.[^/.]+$/, ""));
+      sessionStorage.setItem("pdfLanguage", detectedLang); // Pass detected language
       
       setStatusText("Refining text...");
       router.push("/refined");
@@ -98,7 +93,9 @@ export default function UploadPage() {
               />
             </div>
           ) : (
-            <FileUploader onFileRead={handleFileProcess} />
+            <div className="w-full flex flex-col items-center gap-4">
+              <FileUploader onFileRead={handleFileProcess} />
+            </div>
           )}
         </CardContent>
 

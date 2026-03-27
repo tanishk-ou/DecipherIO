@@ -8,9 +8,9 @@ import { createClient } from "@supabase/supabase-js";
 
 // Initialize Supabase Client for fetching
 // Note: It's safe to use these NEXT_PUBLIC keys on the frontend to READ data
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 // Define the Review Type
 type Review = {
@@ -40,6 +40,11 @@ export default function ReviewsSection() {
   // --- NEW: Fetch Reviews on Load ---
   useEffect(() => {
     async function fetchReviews() {
+      if (!supabase) {
+        setIsLoadingReviews(false);
+        return;
+      }
+
       try {
         // Fetch only approved reviews, newest first
         const { data, error } = await supabase
@@ -86,7 +91,16 @@ export default function ReviewsSection() {
         body: formData 
       });
 
-      if (!res.ok) throw new Error("Failed to upload");
+      // 1. Check if the API sent back our specific missing key error
+      if (!res.ok) {
+         const errorData = await res.json().catch(() => null);
+         if (errorData && errorData.error) {
+             alert(errorData.error);
+             setIsSubmitting(false);
+             return;
+         }
+         throw new Error("Failed to upload");
+      }
 
       alert("Review submitted! It will appear once approved.");
       setIsModalOpen(false);

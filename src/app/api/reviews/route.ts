@@ -2,11 +2,18 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase with the NEW keys
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAdminKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseAdminKey ? createClient(supabaseUrl, supabaseAdminKey) : null;
 
 export async function POST(req: Request) {
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Submitting Community Reviews is currently disabled in local development. Service key missing." }, 
+      { status: 501 }
+    );
+  }
+
   try {
     const formData = await req.formData();
     const name = formData.get('name') as string;

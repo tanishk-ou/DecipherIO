@@ -7,6 +7,10 @@ import MagicText from "@/components/magic-text";
 import ReviewsSection from "@/components/reviews-section";
 import { ChevronRight } from "lucide-react";
 
+const isSupabaseConfigured = 
+  !!process.env.NEXT_PUBLIC_SUPABASE_URL && 
+  !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
 export default function Home() {
   return (
     // Transparent background so the Sidebar theme shows through
@@ -102,7 +106,29 @@ export default function Home() {
       </section>
       
       {/* ================= REVIEWS SECTION ================= */}
-      <ReviewsSection />
+      {isSupabaseConfigured ? (
+        <ReviewsSection />
+      ) : (
+        <section className="py-20 w-full flex justify-center">
+          <div className="max-w-6xl w-full">
+             <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-gray-300 rounded-3xl bg-white/40 text-center">
+                <MagicText tag="h3" text="Community Stories" className="text-[2.5em] font-bold opacity-40" />
+                <p className="text-[1.1em] opacity-60 mt-2 max-w-lg">
+                  See how Decipher.io helps readers worldwide.
+                </p>
+                {/* UPDATED: Increased padding, better contrast, and relative 'em' sizing */}
+                <div className="mt-8 bg-gray-100/90 px-8 py-4 rounded-xl border border-gray-200">
+                   <p className="text-[1em] text-gray-800 font-bold">
+                     Community Reviews are currently disabled in local development. 
+                   </p>
+                   <p className="text-[0.9em] text-gray-600 mt-1 font-medium">
+                     Configure Supabase environment variables to enable this feature, or visit the live deployment.
+                   </p>
+                </div>
+             </div>
+          </div>
+        </section>
+      )}
 
       {/* ================= RESOURCE SECTION ================= */}
       <section className="flex items-center justify-center min-h-[50vh]">

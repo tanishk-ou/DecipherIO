@@ -1,8 +1,8 @@
-# Decipher.io
+# Decipher.IO
 
-**A Gift for Creative Thinkers.** Decipher.io is an AI-powered accessibility platform and browser extension designed to make reading and learning effortless for neurodivergent individuals, specifically those with dyslexia, ADHD, or visual processing challenges.
+**A Gift for Creative Thinkers.** Decipher.IO is an AI-powered accessibility platform and browser extension designed to make reading and learning effortless for neurodivergent individuals, specifically those with dyslexia, ADHD, or visual processing challenges.
 
-By combining advanced OCR, AI text simplification, high-fidelity Text-to-Speech (TTS), and evidence-based visual aids, Decipher.io transforms complex documents and web pages into highly personalized, easily digestible formats.
+By combining advanced OCR, AI text simplification, high-fidelity Text-to-Speech (TTS), and evidence-based visual aids, Decipher.IO transforms complex documents and web pages into highly personalized, easily digestible formats.
 
 **Experience the Live App:** [decipheriovercel.vercel.app](https://decipheriovercel.vercel.app)
 *(Note: Full features, including the Community Review database, are fully configured and active on the live deployment).*
@@ -84,7 +84,7 @@ You will need Node.js installed, along with API keys for Google Gemini and Googl
    ```
 
 4. **Community Reviews & Database Setup (Optional):**
-   Decipher.io uses "Graceful Degradation" for its database features. If you do not configure Supabase, the core AI and accessibility tools will still work perfectly on your local machine, and the Community Review UI will safely hide itself.
+   Decipher.IO uses "Graceful Degradation" for its database features. If you do not configure Supabase, the core AI and accessibility tools will still work perfectly on your local machine, and the Community Review UI will safely hide itself.
    
    If you want to run the **Community Review** section locally, create your own Supabase project with a matching table schema, and add your keys to the `.env.local` file. The app will automatically detect the keys and enable the feature.
 
@@ -99,7 +99,7 @@ You will need Node.js installed, along with API keys for Google Gemini and Googl
 ---
 
 ## 💼 Business Model & Impact
-Decipher.io operates on a **Bottom-Up SaaS model**, balancing immense social impact with scalable unit economics.
+Decipher.IO operates on a **Bottom-Up SaaS model**, balancing immense social impact with scalable unit economics.
 * **Free Tier:** All local, in-browser features (Visual overlays, Dyslexic fonts, Focus mode, standard formatting) are 100% free for individual users.
 * **Pro/Campus Tier:** Advanced AI processing (Image OCR, Simplification, TTS, Speechbot) is monetized via an affordable micro-subscription for power users, or through B2B institutional site licenses sold directly to University Disability Support Offices.
 
